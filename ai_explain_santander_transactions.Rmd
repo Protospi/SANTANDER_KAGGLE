@@ -1,0 +1,481 @@
+---
+title: "Santander"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime:
+  shiny
+---
+
+```{r}
+
+# Load libraries
+library(flexdashboard)
+library(shiny)
+library(tidyverse)
+library(reshape2)
+library(DT)
+library(caret)
+library(gridExtra)
+library(pROC)
+library(shinyWidgets)
+
+# Load data
+train <- read_csv("data/train.csv") %>% select(target:var_199) %>% rename(class = target)
+test <- read_csv("data/test.csv")
+
+# Define X atributes variable
+X <- train %>% select(var_0:var_199) 
+
+# Define Y target variable
+Y <- train$class
+
+# Define X atributes variable
+X_scale <- train %>% select(var_0:var_199) %>%  scale() %>% as_tibble()
+
+# Define Y target variable
+Y_df <- tibble(class = Y)
+
+# Define df_model
+df_model <- Y_df %>%  bind_cols(X_scale)
+
+# Functio to draw matrix
+draw_confusion_matrix <- function(cm) {
+  
+  layout(matrix(c(1,1,2)))
+  par(mar=c(2,2,2,2))
+  plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+  title('Matriz de Confusão das Predições de Transações', cex.main=2)
+  
+  # create the matrix 
+  rect(150, 430, 240, 370, col='#3F97D0')
+  text(195, 435, 'Não', cex=1.2)
+  rect(250, 430, 340, 370, col='#F7AD50')
+  text(295, 435, 'Sim', cex=1.2)
+  text(125, 370, 'Predito', cex=1.3, srt=90, font=2)
+  text(245, 450, 'Observado', cex=1.3, font=2)
+  rect(150, 305, 240, 365, col='#F7AD50')
+  rect(250, 305, 340, 365, col='#3F97D0')
+  text(140, 400, 'Não', cex=1.2, srt=90)
+  text(140, 335, 'Sim', cex=1.2, srt=90)
+  
+  # add in the cm results 
+  res <- as.numeric(cm$table)
+  text(195, 400, res[1], cex=1.6, font=2, col='white')
+  text(195, 335, res[2], cex=1.6, font=2, col='white')
+  text(295, 400, res[3], cex=1.6, font=2, col='white')
+  text(295, 335, res[4], cex=1.6, font=2, col='white')
+  
+  # add in the specifics 
+  plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "Métricas", xaxt='n', yaxt='n')
+  text(10, 85, "Sensibilidade", cex=1.2, font=2)
+  text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+  text(30, 85, "Especificidade", cex=1.2, font=2)
+  text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+  text(50, 85, "Precisão", cex=1.2, font=2)
+  text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+  text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+  text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+  text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+  text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+  
+  # add in the accuracy information 
+  text(30, 35, "Acuidade", cex=1.5, font=2)
+  text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+  text(70, 35, "Kappa", cex=1.5, font=2)
+  text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+# Balanço
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Distribuição de Transações
+
+```{r}
+
+# Render plot
+renderPlot({
+  
+  # Split data
+  split <- round(nrow(df_model) * input$split_1)
+  train_train <- df_model[1:split,]
+  
+  # Compute number of transactions on train set
+  dist_target_df <- tibble(Id = 1:split,
+                           `Transações` = train_train$class)
+  
+  # Draw colum plot of transactions
+  ggplot(dist_target_df, aes(y = `Transações`, x = Id, color = `Transações`)) +
+    geom_jitter(alpha = 0.2)+
+    labs(title = "Dispersão das Transações no Banco de Treino",
+         x = "Observações")
+  
+})
+
+```
+
+
+### Balanço da Classe de Transações Banco de Treino
+
+```{r}
+
+# Render plot
+renderPlot({
+
+# Define models train and test
+split <- round(nrow(df_model) * input$split_1)
+train_train <- df_model[1:split,]
+train_test <- df_model[split:nrow(df_model),]
+
+# Define tibble of percentage target split train   
+pct_train_df <- tibble(`Transação` = c("Não", "Sim"),
+                       Percentual = as.vector(prop.table(table(train_train$class))) * 100)
+
+# Draw colum plot of transactions
+ggplot(pct_train_df, aes(x = `Transação`, y = Percentual, fill = `Transação`)) +
+  geom_col()+
+  geom_text(aes(label = paste0(round(Percentual,2)," %"), x = `Transação`, y = Percentual),
+            vjust = -0.5)+
+  labs(title = "Percentual de Transações em 80 % do Banco de Treino")+
+  ylim(c(0,100))+
+  scale_fill_manual(values = c("#151E3D", "#0078d7"))
+
+})
+
+```
+
+### Balanço da Classe de Transações Banco de Teste
+
+```{r}
+
+# Render plot
+renderPlot({
+
+# Define models train and test
+split <- round(nrow(df_model) * input$split_1)
+train_train <- df_model[1:split,]
+train_test <- df_model[split:nrow(df_model),]
+
+# Define tibble of percentage target split train   
+pct_test_df <- tibble(`Transação` = c("Não", "Sim"),
+                      Percentual = as.vector(prop.table(table(train_test$class))) * 100)
+
+# Draw colum plot of transactions
+ggplot(pct_test_df, aes(x = `Transação`, y = Percentual, fill = `Transação`)) +
+  geom_col()+
+  geom_text(aes(label = paste0(round(Percentual,2)," %"), x = `Transação`, y = Percentual), vjust = -0.5)+
+  labs(title = "Percentual de Transações em 20 % do Banco de Treino")+
+  ylim(c(0,100))+
+  scale_fill_manual(values = c("#151E3D", "#0078d7"))
+
+})
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Paramêtros
+
+```{r}
+
+# Define slder input buttom
+sliderInput("split_1",
+            "Percentual de Banco Treino/Teste",
+            min = 0.01,
+            max = 0.99,
+            value = 0.8)
+
+
+```
+
+
+# Descritiva
+
+
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Dispersão das Variáveis
+
+```{r}
+
+# Render plot
+renderPlot({
+  
+  # Split data
+  split <- round(nrow(df_model) * input$split_2)
+  var_df <- X_scale[1:split,input$var_1] %>%  rename(var = input$var_1) %>% mutate(x = 1:split)
+  
+  # Draw colum plot of transactions
+  ggplot(var_df, aes(x = x, y = var)) +
+    geom_point(color = "#0078d7", alpha = 0.7)+
+    labs(title = paste0("Dispersão da Variável ", input$var_1),
+         x = "Observações",
+         y = "Valores")
+  
+})
+
+```
+
+
+### Distribuição das Variáveis
+
+```{r}
+
+# Render plot
+renderPlot({
+  
+  # Split data
+  split <- round(nrow(df_model) * input$split_2)
+  var_df <- X_scale[1:split,input$var_1] %>%  rename(var = input$var_1)
+  
+  # Draw colum plot of transactions
+  ggplot(var_df, aes(x = var)) +
+    geom_histogram(fill = "#0078d7")+
+    labs(title = paste0("Histograma da Variável ", input$var_1),
+         x = input$var_1,
+         y = "Frequência")
+  
+})
+
+```
+
+
+### Correlação das Variáveis
+
+```{r}
+
+# Render plot
+renderPlot({
+  
+  # Define correlation matrix
+  cormat <- round(cor(X),2)
+  melted_cormat <- melt(cormat) %>%  
+    mutate(Var1 = as.numeric(str_remove(Var1, "var_")),
+           Var2 = as.numeric(str_remove(Var2, "var_")))
+  
+  # Define breaks
+  dist_breaks <- seq(0,200, by = 40)
+  
+  # PLot correlation matrix
+  ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+    geom_tile()+
+    scale_x_continuous( breaks= dist_breaks)+
+    scale_y_continuous( breaks = dist_breaks)+
+  labs(title = "Mapa de calor de Correlações das Variáveis",
+       x = "Variáveis",
+       y = "Variáveis",
+       fill = "Correlações")
+  
+})
+
+```
+
+
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Paramêtros
+
+```{r}
+
+# Define slder input buttom
+selectInput("var_1",
+            "Variável Explicativa",
+            choices = paste0("var_", 0:199))
+
+# Define slder input buttom
+sliderInput("split_2",
+            "Percentual de Banco Treino/Teste",
+            min = 0.01,
+            max = 0.99,
+            value = 0.8)
+
+
+```
+
+
+# Regressão Logística
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+  
+```{r}
+
+# Define reactive object data
+data_split <- reactive({
+  
+  # Define models train and test
+  split <- round(nrow(df_model) * 0.8)
+  train_train <- df_model[1:split,]
+  train_test <- df_model[split:nrow(df_model),]
+  
+  # Return filtered dates X and Y
+  return(list(train_train, train_test))
+  
+})
+
+```
+
+
+```{r}
+
+# Define modelo de regressão linear
+logistic_reg <- eventReactive(input$fit, {
+  
+  # Select variables for the models
+  df_train <- data_split()[[1]] %>% 
+    select(c("class", input$features)) 
+  
+  # Print Model
+  model <- glm(class ~ .,
+               data = df_train,
+               family = "binomial")
+  
+  # Return model
+  return(model)
+  
+})
+
+# Define features response
+feat <- eventReactive(input$fit,{
+  
+  return(input$features)
+  
+})
+
+```
+
+### Tabela das Estatísticas de Coeficientes do Modelo
+
+```{r}
+
+# Define model coeficients
+renderDT({
+  
+  # Print Model
+  model <- summary(logistic_reg())$coefficients %>% 
+    as_tibble() %>% 
+    round(6) %>% 
+    rename(Estimativa = Estimate,
+           `Erro Padrão` = "Std. Error",
+           `T-Valor` = "z value",
+           `P-Valor` = "Pr(>|z|)")
+  
+  # Define statistics
+  stat <- tibble(`Coeficiente` = c("Intercepto", feat()))
+  
+  # Define results
+  results <- stat %>%  
+    bind_cols(model)
+  
+  # Print table
+  datatable(results,
+            options = list(dom = "t",
+                           pageLength = 200,
+                           scrollY = "300px"))
+  
+})
+
+```
+
+### Gráfico Matriz de Confusão de Preditos e Observados
+
+```{r}
+
+# Define target_feature scatterplot
+renderPlot({
+  
+  # Define target anf feature
+  predicted <- predict(logistic_reg(), newdata = data_split()[[2]][,-1], type = "response")
+  targets <- data_split()[[2]]$class
+  
+  # Calculate confusion matrix
+  conf_mat <- confusionMatrix(as.factor(ifelse(predicted > input$cut, 1, 0)),
+                              as.factor(targets))
+  
+  # Draw the matrix
+  draw_confusion_matrix(conf_mat)
+  
+})
+
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+  
+### Paramêtros  
+  
+```{r}
+
+# Define variables selector
+pickerInput(inputId = "features",
+            label = "Variáveis Explicativas",
+            choices = colnames(X),
+            multiple = T,
+            options = list(`actions-box` = TRUE,
+                          `deselect-all-text` = "Limpar",
+                          `select-all-text` = "Selecionar Tudo",
+                          `none-selected-text` = "Nada Selecionado"))
+
+# Define train percentual
+sliderInput("train",
+            "Percentual Banco de Treino",
+            min = 0.01,
+            max = 0.99,
+            value = 0.75)
+
+# Define probability cut button
+sliderInput("cut",
+            "Probabilidade de Corte",
+            min = 0.01,
+            max = 0.99,
+            value = 0.5)
+
+# Define model button
+actionButton("fit", "Ajuste")
+
+
+```
+
+
+### Gráfico da Curva ROC
+
+```{r}
+
+# Define target_feature scatterplot
+renderPlot({
+  
+  # Calculate roc curve
+  roc_curve <- roc(data_split()[[2]]$class,
+                   predict(logistic_reg(),
+                           newdata = data_split()[[2]][,-1],
+                           type = "response"))
+  
+  # Populate list of results
+  results_roc <- tibble(tpr = roc_curve$sensitivities,
+                        fpr = 1 - roc_curve$specificities)
+  
+  # Define custom colors
+  custom_col <- c("#0078d7", "#009E73", "#0072B2", "#0078d7")
+  
+  # Plot ROC curve for all 4 models
+  ggplot(aes(x = fpr,  y = tpr), data = results_roc) +
+    geom_line(color = "#0078d7") +
+    geom_abline(intercept = 0, slope = 1, color = "#151E3D", size = 1) +
+    labs(title = "Curva ROC do Modelo Ajustado")
+  
+})
+
+```
