@@ -7,7 +7,7 @@ Competição Kaggle Transações de Clientes Santander
 # 1 - Entendimento do Negócio
 
 
-No ano 2019 o banco [\textcolor{blue}{Santander}](https://www.santander.com.br/) publicou a competição [\textcolor{blue}{Predição das Transações de Clientes}](https://www.kaggle.com/c/santander-customer-transaction-prediction/overview)  na comunidade de cientistas de dados [\textcolor{blue}{Kaggle}](https://www.kaggle.com/), subsidiária da Google LLC. Apesar da competição já ter sido encerrada, os dados ainda estão disponibilizados assim como a submissão de predições ainda é permitida para que a comunidade participe da competição com objetivo de aprendizado.
+No ano 2019 o banco [Santander](https://www.santander.com.br/) publicou a competição [Predição das Transações de Clientes](https://www.kaggle.com/c/santander-customer-transaction-prediction/overview)  na comunidade de cientistas de dados [Kaggle](https://www.kaggle.com/), subsidiária da Google LLC. Apesar da competição já ter sido encerrada, os dados ainda estão disponibilizados assim como a submissão de predições ainda é permitida para que a comunidade participe da competição com objetivo de aprendizado.
 
 A descrição da competição apresentou a missão do banco de oferecer serviços e produtos para indivíduos e empresas que forneçam saúde financeira e auxiliem seus clientes a alcançarem seus objetivos financeiros.
 
